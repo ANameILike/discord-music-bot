@@ -1,5 +1,7 @@
-# To add: loop queue/current song
-# To improve: show queue
+# To add: loop queue/current song, music folders/playlists, smart folder selection, random playlist
+# To improve: !queue
+# To fix: !skip (it skips everything till it reaches the end of the queue)
+# To check: !remove
 
 # Import stuff
 import discord
@@ -17,7 +19,7 @@ def get_clean_list():
     remove_mp3 = [s.replace(".mp3", "") for s in remove_m4a]
     return remove_mp3
 
-# For valid song names, returns a source for the player
+# Returns a source for the player for valid names (invalid returns False)
 def get_source(song_name):
     if file_exists("music\\" + song_name + ".m4a"):
         source = FFmpegPCMAudio("music\\" + song_name + ".m4a")
@@ -38,17 +40,56 @@ queued_song_names = []
 song_discard = []
 discarded_song_names = []
 
-# Exactly what the title says
-def play_next_in_queue(ctx):
+# Exactly what the name suggests
+def play_next_in_queue(useless):  # maybe try making ctx voice instead?
     if len(song_queue) > 1:
-        voice = ctx.guild.voice_client
+        voice = discord.utils.get(client.voice_clients)
         next_up = song_queue[1]
         remove_first_song_in_queue = song_queue.pop(0)
         remove_first_name = queued_song_names.pop(0)
         song_discard.append(remove_first_song_in_queue)
         discarded_song_names.append(remove_first_name)
-        player = voice.play(next_up)
+        voice.stop()
+        player = voice.play(next_up, after=play_next_in_queue)
+    else:
+        cease()
 
+# Returns True/False based on who's present in the voice channel
+# modes: "bot" checks for bot, "user" checks for user, "both" checks for both
+async def check_voice_channel(ctx, mode):
+    if mode == "bot":
+        if ctx.voice_client:
+            return True
+        else:
+            await ctx.send("I'm not in a voice channel lol")
+            return False
+    elif mode == "user":
+        if ctx.author.voice:
+            return True
+        else:
+            await ctx.send("You gotta be in a voice channel lol")
+            return False
+    elif mode == "both":
+        if not ctx.author.voice and not ctx.voice_client:
+            await ctx.send("You're not in a voice channel. I'm not in a voice channel. What are we doing here?")
+            return False
+        elif ctx.author.voice and not ctx.voice_client:
+            await ctx.send("I'm not in a voice channel lol")
+            return False
+        elif not ctx.author.voice or ctx.author.voice.channel != ctx.voice_client.channel:
+            await ctx.send("You gotta be in my voice channel lol")
+            return False
+        else:
+            return True
+
+# Stops playing, clears the queue
+def cease():
+    song_queue.clear()
+    song_discard.clear()
+    queued_song_names.clear()
+    discarded_song_names.clear()
+    voice = discord.utils.get(client.voice_clients)
+    voice.stop()
 
 # Commands start below
 
@@ -71,35 +112,28 @@ async def hello(ctx):
 # (!join) Join voice channel
 @client.command()
 async def join(ctx):
-    if (ctx.author.voice):
-        channel = ctx.message.author.voice.channel
-        voice = await channel.connect()
-        await ctx.send("Hello")
-    else:
-        await ctx.send("You gotta be in a voice channel lol")
+    if await check_voice_channel(ctx, "user"):
+        if ctx.voice_client:
+            await ctx.send("I'm already in a voice channel")
+        else:
+            await ctx.message.add_reaction("👍")
+            channel = ctx.message.author.voice.channel
+            voice = await channel.connect()
 
 # (!leave) Leave voice channel
 @client.command()
 async def leave(ctx):
-    if ctx.voice_client:
-        if ctx.author.voice:
-            await ctx.guild.voice_client.disconnect()
-            await ctx.send("Kk goodbye")
-        else:
-            await ctx.send("You gotta be in the voice channel lol")
-    else:
-        await ctx.send("I'm not in a voice channel lol")
+    if await check_voice_channel(ctx, "both"):
+        await ctx.message.add_reaction("👍")
+        await ctx.guild.voice_client.disconnect()
 
 # (!pause) Basic pause
 @client.command()
 async def pause(ctx):
-    if not ctx.voice_client:
-        await ctx.send("I'm not in a voice channel lol")
-    elif not ctx.author.voice:
-        await ctx.send("You gotta be a voice channel lol")
-    else:
+    if await check_voice_channel(ctx, "both"):
         voice = discord.utils.get(client.voice_clients, guild=ctx.guild)
         if voice.is_playing():
+            await ctx.message.add_reaction("👍")
             voice.pause()
         else:
             await ctx.send("Gotta be playing something to pause lol")
@@ -107,42 +141,35 @@ async def pause(ctx):
 # (!resume) Basic resume
 @client.command()
 async def resume(ctx):   
-    if not ctx.voice_client:
-        await ctx.send("I'm not in a voice channel lol")
-    elif not ctx.author.voice:
-        await ctx.send("You gotta be a voice channel lol")
-    else:    
+    if await check_voice_channel(ctx, "both"):   
         voice = discord.utils.get(client.voice_clients, guild=ctx.guild)
         if voice.is_paused():
+            await ctx.message.add_reaction("👍")
             voice.resume()
         else:
            await ctx.send("Gotta be paused to resume something lol")
 
-# (!stop) Basic stop
+# (!stop) Basic stop, clears the queue (pretty much synonymous with !clear)
 @client.command()
 async def stop(ctx):    
-    if not ctx.voice_client:
-        await ctx.send("I'm not in a voice channel lol")
-    elif not ctx.author.voice:
-        await ctx.send("You gotta be a voice channel lol")
-    else:
+    if await check_voice_channel(ctx, "both"):
         voice = discord.utils.get(client.voice_clients, guild=ctx.guild)
-        voice.stop()
+        if voice.is_playing():
+            await ctx.message.add_reaction("👍")
+            cease()
+        else:
+            await ctx.send("What are you stopping lol")
 
 # (!play [songname]) Plays a song if something's not already playing, adds it to the queue otherwise
 @client.command()
 async def play(ctx, arg):
-    voice = ctx.guild.voice_client
-    potential_source = get_source(arg)
-    if not ctx.voice_client:
-        await ctx.send("I'm not in a voice channel lol")
-    elif not ctx.author.voice:
-        await ctx.send("You gotta be a voice channel lol")
-    elif potential_source == False:
-        await ctx.send("not a valid name, possible songs below:")
-        await ctx.send("\n".join(cleaned_song_list))
-    else:
-        if song_queue == []:
+    if await check_voice_channel(ctx, "both"):
+        voice = ctx.guild.voice_client
+        potential_source = get_source(arg)
+        if potential_source == False:
+            await ctx.send("not a valid name, possible songs below:")
+            await ctx.send("\n".join(cleaned_song_list))
+        elif song_queue == []:
             song_queue.append(potential_source)
             queued_song_names.append(arg)
             player = voice.play(potential_source, after=play_next_in_queue)
@@ -155,54 +182,39 @@ async def play(ctx, arg):
 # (!queue) Displays the queue
 @client.command()
 async def queue(ctx):
-    if len(song_queue) > 0:
-        cleaned_queue_listing = "\n".join(queued_song_names)
-        await ctx.send("(NOW PLAYING) " + cleaned_queue_listing)
-    else:
-        await ctx.send("Queue's empty lol")
+    if await check_voice_channel(ctx, "bot"):
+        if len(song_queue) > 0:
+            cleaned_queue_listing = "\n".join(queued_song_names)
+            await ctx.send("(NOW PLAYING) " + cleaned_queue_listing)
+        else:
+            await ctx.send("Queue's empty lol")
 
 # (!skip) Skips the current song
 @client.command()
 async def skip(ctx):
-    if not ctx.voice_client:
-        await ctx.send("I'm not in a voice channel lol")
-    elif not ctx.author.voice:
-        await ctx.send("You gotta be a voice channel lol")
-    else:
+    if await check_voice_channel(ctx, "both"):
         voice = discord.utils.get(client.voice_clients, guild=ctx.guild)
         if not voice.is_playing():
             await ctx.send("Nothing's playing lol")
         elif len(song_queue) == 1:
-            voice.stop()
+            cease()
             await ctx.send("You've reached the end!")
         else:
+            await ctx.message.add_reaction("👍")
             voice.stop()
             play_next_in_queue(ctx)
 
 # (!clear) Clears the queue
 @client.command()
 async def clear(ctx):
-    if not ctx.voice_client:
-        await ctx.send("I'm not in a voice channel lol")
-    elif not ctx.author.voice:
-        await ctx.send("You gotta be a voice channel lol")
-    else:
-        song_queue.clear()
-        song_discard.clear()
-        queued_song_names.clear()
-        discarded_song_names.clear()
-        voice = discord.utils.get(client.voice_clients, guild=ctx.guild)
-        voice.stop()
+    if await check_voice_channel(ctx, "both"):
+        cease()
         await ctx.send("Everything's gone now")
 
 # (!remove [place]) Removes the song at the specified place in the queue (0 for currently playing)
 @client.command()
 async def remove(ctx, arg):
-    if not ctx.voice_client:
-        await ctx.send("I'm not in a voice channel lol")
-    elif not ctx.author.voice:
-        await ctx.send("You gotta be a voice channel lol")
-    else:
+    if await check_voice_channel(ctx, "both"):
         try:
             queue_place = int(arg)
             if queue_place < 0:
@@ -222,36 +234,30 @@ async def remove(ctx, arg):
 # (!playrandom [number]) Plays a number of random songs
 @client.command()
 async def playrandom(ctx, arg):
-    voice = ctx.guild.voice_client
-    try:
-        arg_as_number = int(arg)
-    except ValueError:
-        await ctx.send("That's not a valid number lol")
-    if not ctx.voice_client:
-        await ctx.send("I'm not in a voice channel lol")
-    elif not ctx.author.voice:
-        await ctx.send("You gotta be a voice channel lol")
-    elif arg_as_number < 1:
-        await ctx.send("What's the point lol")
-    elif arg_as_number > 10:
-        await ctx.send("Let's keep it below 10 at once lol")
-    else:
-        random_songs = random.choices(cleaned_song_list, k=arg_as_number)
-        for random_song in random_songs:
-            source_of_random_song = get_source(random_song)
-            if song_queue == []:
-                song_queue.append(source_of_random_song)
-                queued_song_names.append(random_song)
-                player = voice.play(source_of_random_song, after=play_next_in_queue)
-                await ctx.send("Now playing " + random_song)
-            else:
-                song_queue.append(source_of_random_song)
-                queued_song_names.append(random_song)
-                await ctx.send("Added " + random_song + " to the queue!")    
+    if await check_voice_channel(ctx, "both"):
+        voice = ctx.guild.voice_client
+        try:
+            arg_as_number = int(arg)
+        except ValueError:
+            await ctx.send("That's not a valid number lol")
+        if arg_as_number < 1:
+            await ctx.send("What's the point lol")
+        elif arg_as_number > 10:
+            await ctx.send("Let's keep it below 10 at once lol")
+        else:
+            random_songs = random.choices(cleaned_song_list, k=arg_as_number)
+            for random_song in random_songs:
+                source_of_random_song = get_source(random_song)
+                if song_queue == []:
+                    song_queue.append(source_of_random_song)
+                    queued_song_names.append(random_song)
+                    player = voice.play(source_of_random_song, after=play_next_in_queue)
+                    await ctx.send("Now playing " + random_song)
+                else:
+                    song_queue.append(source_of_random_song)
+                    queued_song_names.append(random_song)
+                    await ctx.send("Added " + random_song + " to the queue!")    
     
 
 # Starts the magic
 client.run(BOTTOKEN)
-
-
-
