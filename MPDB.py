@@ -1,7 +1,5 @@
 # To add: loop queue/current song, music folders/playlists, smart folder selection, random playlist
-# To improve: !queue
-# To fix: !skip (it skips everything till it reaches the end of the queue)
-# To check: !remove
+# To improve: show queue
 
 # Import stuff
 import discord
@@ -41,7 +39,7 @@ song_discard = []
 discarded_song_names = []
 
 # Exactly what the name suggests
-def play_next_in_queue(useless):  # maybe try making ctx voice instead?
+def play_next_in_queue(useless):
     if len(song_queue) > 1:
         voice = discord.utils.get(client.voice_clients)
         next_up = song_queue[1]
@@ -202,7 +200,6 @@ async def skip(ctx):
         else:
             await ctx.message.add_reaction("👍")
             voice.stop()
-            play_next_in_queue(ctx)
 
 # (!clear) Clears the queue
 @client.command()
@@ -219,6 +216,8 @@ async def remove(ctx, arg):
             queue_place = int(arg)
             if queue_place < 0:
                 await ctx.send("Negative queue place lol really")
+            elif queue_place == 0:
+                await ctx.send("Use !skip instead please (tbh idk how to implement this)")
             else:
                 song_queue.pop(queue_place)
                 removed_name = queued_song_names.pop(queue_place)
