@@ -2,7 +2,7 @@
 Music bot for discord
 ---------------------
 - Uses ! prefix
-- Can currently only play certain songs from my music folder
+- Can currently only play certain songs from my music collection
 - Commands:
     - help, hello
     - join, play [song name], pause, resume, stop, leave

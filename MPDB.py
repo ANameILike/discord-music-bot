@@ -1,29 +1,29 @@
-# To add: loop queue/current song, music folders/playlists, smart folder selection, random playlist
+# To add: loop queue/current song, music folders/playlists, smart folder selection, random playlist, shuffle
 # To improve: show queue
+# Timeout feature?
+# Maybe a "Not these songs" function where you make a temporary new catalog with songs from same album gone
+# Display genres, display albums, display songs
+
+# Priority: display catalog, play random playlists
 
 # Import stuff
 import discord
+import MusicLibraryNavigation
 from discord.ext import commands
 from discord import FFmpegPCMAudio
-import os
 from os.path import exists as file_exists
-import random
 from apikeys import *
+import random
+import os
 
-# Creates a list of available songs (cleaned_song_list)
-def get_clean_list():
-    raw_song_list = os.listdir("music")
-    remove_m4a = [s.replace(".m4a", "") for s in raw_song_list]
-    remove_mp3 = [s.replace(".mp3", "") for s in remove_m4a]
-    return remove_mp3
 
 # Returns a source for the player for valid names (invalid returns False)
 def get_source(song_name):
-    if file_exists("music\\" + song_name + ".m4a"):
-        source = FFmpegPCMAudio("music\\" + song_name + ".m4a")
-        return source
-    elif file_exists("music\\" + song_name + ".mp3"):
-        source = FFmpegPCMAudio("music\\" + song_name + ".mp3")
+    song_path = MusicLibraryNavigation.get_song_path(song_name)
+    if song_path == 0:
+        return False 
+    elif file_exists(song_path):
+        source = FFmpegPCMAudio(song_path)
         return source
     else:
         return False
@@ -32,7 +32,6 @@ def get_source(song_name):
 client = commands.Bot(command_prefix = '!', help_command=None)
 
 # Queue setup
-cleaned_song_list = get_clean_list()
 song_queue = []
 queued_song_names = []
 song_discard = []
@@ -152,7 +151,7 @@ async def resume(ctx):
 async def stop(ctx):    
     if await check_voice_channel(ctx, "both"):
         voice = discord.utils.get(client.voice_clients, guild=ctx.guild)
-        if voice.is_playing():
+        if voice.is_playing() or voice.is_paused():
             await ctx.message.add_reaction("👍")
             cease()
         else:
@@ -165,8 +164,7 @@ async def play(ctx, arg):
         voice = ctx.guild.voice_client
         potential_source = get_source(arg)
         if potential_source == False:
-            await ctx.send("not a valid name, possible songs below:")
-            await ctx.send("\n".join(cleaned_song_list))
+            await ctx.send("Either I don't have that song or you typed something wrong. Song names are case sensitive and multi-word names should be in quotes.")
         elif song_queue == []:
             song_queue.append(potential_source)
             queued_song_names.append(arg)
@@ -244,8 +242,8 @@ async def playrandom(ctx, arg):
         elif arg_as_number > 10:
             await ctx.send("Let's keep it below 10 at once lol")
         else:
-            random_songs = random.choices(cleaned_song_list, k=arg_as_number)
-            for random_song in random_songs:
+            for i in range(arg_as_number):
+                random_song = MusicLibraryNavigation.get_any_random_song_name()
                 source_of_random_song = get_source(random_song)
                 if song_queue == []:
                     song_queue.append(source_of_random_song)
@@ -257,6 +255,22 @@ async def playrandom(ctx, arg):
                     queued_song_names.append(random_song)
                     await ctx.send("Added " + random_song + " to the queue!")    
     
+@client.command()
+async def playrandosm(ctx):
+    if await check_voice_channel(ctx, "both"):
+        voice = ctx.guild.voice_client
+        random_song = MusicLibraryNavigation.get_any_random_song_name()
+        source_of_random_song = get_source(random_song)
+        if song_queue == []:
+            song_queue.append(source_of_random_song)
+            queued_song_names.append(random_song)
+            player = voice.play(source_of_random_song, after=play_next_in_queue)
+            await ctx.send("Now playing " + random_song)
+        else:
+            song_queue.append(source_of_random_song)
+            queued_song_names.append(random_song)
+            await ctx.send("Added " + random_song + " to the queue!")    
+        
 
 # Starts the magic
 client.run(BOTTOKEN)
