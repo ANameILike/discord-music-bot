@@ -254,23 +254,6 @@ async def playrandom(ctx, arg):
                     song_queue.append(source_of_random_song)
                     queued_song_names.append(random_song)
                     await ctx.send("Added " + random_song + " to the queue!")    
-    
-@client.command()
-async def playrandosm(ctx):
-    if await check_voice_channel(ctx, "both"):
-        voice = ctx.guild.voice_client
-        random_song = MusicLibraryNavigation.get_any_random_song_name()
-        source_of_random_song = get_source(random_song)
-        if song_queue == []:
-            song_queue.append(source_of_random_song)
-            queued_song_names.append(random_song)
-            player = voice.play(source_of_random_song, after=play_next_in_queue)
-            await ctx.send("Now playing " + random_song)
-        else:
-            song_queue.append(source_of_random_song)
-            queued_song_names.append(random_song)
-            await ctx.send("Added " + random_song + " to the queue!")    
-        
 
 # Starts the magic
 client.run(BOTTOKEN)
