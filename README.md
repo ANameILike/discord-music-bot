@@ -5,7 +5,7 @@ Music bot for discord
 - Can currently only play certain songs from my music collection
 - Commands:
     - help, hello
-    - join, play [song name], pause, resume, stop, leave
+    - join, play [song name], playalbum [album name], pause, resume, stop, leave
     - queue, skip, remove [queue place], clear
     - playrandom [number]
 

@@ -3,6 +3,7 @@
 # Timeout feature?
 # Maybe a "Not these songs" function where you make a temporary new catalog with songs from same album gone
 # Display genres, display albums, display songs
+# Maybe change playrandom to randomsong? so you can do randomalbum?
 
 # Priority: display catalog, play random playlists
 
@@ -15,7 +16,6 @@ from os.path import exists as file_exists
 from apikeys import *
 import random
 import os
-
 
 # Returns a source for the player for valid names (invalid returns False)
 def get_source(song_name):
@@ -174,6 +174,28 @@ async def play(ctx, arg):
             song_queue.append(potential_source)
             queued_song_names.append(arg)
             await ctx.send("Added " + arg + " to the queue!")
+
+# (!playalbum [albumname]) Plays all songs of an album
+@client.command()
+async def playalbum(ctx, arg):
+    if await check_voice_channel(ctx, "both"):
+        voice = ctx.guild.voice_client
+        valid, tag = MusicLibraryNavigation.check_album_validity_and_get_tag(arg)
+        if not valid:
+            await ctx.send("Either I don't have that album or you typed something wrong. Same thing with case sensitivity and quotes usage.")
+        elif song_queue == []:
+            songs_in_album = MusicLibraryNavigation.get_song_names_from_album(arg + " " + tag)
+            first_song = songs_in_album.pop(0)
+            queued_song_names.append(first_song)
+            player = voice.play(get_source(first_song), after=play_next_in_queue)
+            for song_name in songs_in_album:
+                song_queue.append(get_source(song_name))
+                queued_song_names.append(song_name)
+        else:
+            songs_in_album = MusicLibraryNavigation.get_song_names_from_album(arg + " " + tag)
+            for song_name in songs_in_album:
+                song_queue.append(get_source(song_name))
+                queued_song_names.append(song_name)            
 
 # (!queue) Displays the queue
 @client.command()
