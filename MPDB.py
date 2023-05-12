@@ -6,10 +6,13 @@
 # Maybe change playrandom to randomsong? so you can do randomalbum?
 
 # Priority: display catalog, play random playlists
+# Add acknowledgement and display thing for playing albums!, fix skip not updating queue
 
 # Import stuff
 import discord
 import MusicLibraryNavigation
+import MusicBotRandomness
+import MusicBotSearching
 from discord.ext import commands
 from discord import FFmpegPCMAudio
 from os.path import exists as file_exists
@@ -21,21 +24,30 @@ import os
 def get_source(song_name):
     song_path = MusicLibraryNavigation.get_song_path(song_name)
     if song_path == 0:
-        return False 
+        return False, "Bro you typed it wrong lol"
     elif file_exists(song_path):
         source = FFmpegPCMAudio(song_path)
-        return source
+        if song_path.partition(". ")[2] == "":
+            proper_name = song_path.partition("]\\")[2][:-4]
+        else:
+            proper_name = song_path.partition(". ")[2][:-4]
+        return source, proper_name
     else:
-        return False
+        return False, "Bro you typed it wrong lol"
 
 # Still setting up
-client = commands.Bot(command_prefix = '!', help_command=None)
+intents = discord.Intents.default()
+intents.message_content = True
+client = commands.Bot(command_prefix = ['!', "！"], help_command=None, intents=intents)
 
 # Queue setup
 song_queue = []
 queued_song_names = []
 song_discard = []
 discarded_song_names = []
+
+# Setting up lists of valid album and song names
+all_album_names, all_song_names = MusicBotSearching.all_album_names, MusicBotSearching.all_song_names
 
 # Exactly what the name suggests
 def play_next_in_queue(useless):
@@ -47,7 +59,7 @@ def play_next_in_queue(useless):
         song_discard.append(remove_first_song_in_queue)
         discarded_song_names.append(remove_first_name)
         voice.stop()
-        player = voice.play(next_up, after=play_next_in_queue)
+        voice.play(next_up, after=play_next_in_queue)
     else:
         cease()
 
@@ -74,7 +86,7 @@ async def check_voice_channel(ctx, mode):
             await ctx.send("I'm not in a voice channel lol")
             return False
         elif not ctx.author.voice or ctx.author.voice.channel != ctx.voice_client.channel:
-            await ctx.send("You gotta be in my voice channel lol")
+            await ctx.send("You gotta be in my voice channel lol GET IN HERE")
             return False
         else:
             return True
@@ -86,7 +98,8 @@ def cease():
     queued_song_names.clear()
     discarded_song_names.clear()
     voice = discord.utils.get(client.voice_clients)
-    voice.stop()
+    if voice:
+        voice.stop()
 
 # Commands start below
 
@@ -99,7 +112,7 @@ async def on_ready():
 # (!help) Displays commands
 @client.command()
 async def help(ctx):
-    await ctx.send("Here are a list of potential commands to be used with the (!) prefix: \nGeneral: \n\thelp, hello \nMusic (must do !join first): \n\tplay [song name], pause, resume, stop, leave \n\tqueue, skip, remove [queue number], clear \n\tplayrandom [number]")
+    await ctx.send("Here are a list of potential commands to be used with the (!) prefix: \nGeneral: \n\thelp, hello \nMusic (must do !join first): \n\tplay [song name], play-album [album name], pause, resume, stop, leave \n\tqueue, shuffle, skip, remove [queue number], clear \n\tplayrandom [number]")
 
 # (!hello) Basic hello
 @client.command()
@@ -110,18 +123,20 @@ async def hello(ctx):
 @client.command()
 async def join(ctx):
     if await check_voice_channel(ctx, "user"):
-        if ctx.voice_client:
+        if client.voice_clients:
             await ctx.send("I'm already in a voice channel")
         else:
             await ctx.message.add_reaction("👍")
             channel = ctx.message.author.voice.channel
-            voice = await channel.connect()
+            await channel.connect()
+            cease()
 
 # (!leave) Leave voice channel
-@client.command()
+@client.command(aliases=["die", "depart", "goodbye"])
 async def leave(ctx):
     if await check_voice_channel(ctx, "both"):
         await ctx.message.add_reaction("👍")
+        cease()
         await ctx.guild.voice_client.disconnect()
 
 # (!pause) Basic pause
@@ -158,44 +173,48 @@ async def stop(ctx):
             await ctx.send("What are you stopping lol")
 
 # (!play [songname]) Plays a song if something's not already playing, adds it to the queue otherwise
-@client.command()
-async def play(ctx, arg):
+@client.command(aliases=["放"])
+async def play(ctx, *, arg):
     if await check_voice_channel(ctx, "both"):
-        voice = ctx.guild.voice_client
-        potential_source = get_source(arg)
+        voice = discord.utils.get(client.voice_clients, guild=ctx.guild)
+        potential_source, name_to_display = get_source(arg)
         if potential_source == False:
-            await ctx.send("Either I don't have that song or you typed something wrong. Song names are case sensitive and multi-word names should be in quotes.")
+            await ctx.send("Either I don't have that song or you typed something wrong D: \nDon't use quotes here and don't worry about case sensitivity")
         elif song_queue == []:
             song_queue.append(potential_source)
-            queued_song_names.append(arg)
-            player = voice.play(potential_source, after=play_next_in_queue)
-            await ctx.send("Now playing " + arg)
+            queued_song_names.append(name_to_display)
+            voice.play(potential_source, after=play_next_in_queue)
+            await ctx.send("Now playing " + name_to_display)
         else:
             song_queue.append(potential_source)
-            queued_song_names.append(arg)
-            await ctx.send("Added " + arg + " to the queue!")
+            queued_song_names.append(name_to_display)
+            await ctx.send("Added " + name_to_display + " to the queue!")
 
-# (!playalbum [albumname]) Plays all songs of an album
-@client.command()
-async def playalbum(ctx, arg):
+# (!play-album [albumname]) Plays all songs of an album
+@client.command(name="play-album")
+async def playalbum(ctx, *, arg):
     if await check_voice_channel(ctx, "both"):
-        voice = ctx.guild.voice_client
-        valid, tag = MusicLibraryNavigation.check_album_validity_and_get_tag(arg)
+        voice = discord.utils.get(client.voice_clients, guild=ctx.guild)
+        valid, tag, proper_album_name = MusicLibraryNavigation.check_album_validity_and_get_tag(arg)
         if not valid:
-            await ctx.send("Either I don't have that album or you typed something wrong. Same thing with case sensitivity and quotes usage.")
+            await ctx.send("Either I don't have that album or you typed something wrong D: \nDon't use quotes here and don't worry about case sensitivity)")
         elif song_queue == []:
-            songs_in_album = MusicLibraryNavigation.get_song_names_from_album(arg + " " + tag)
+            await ctx.message.add_reaction("👍")
+            songs_in_album = MusicLibraryNavigation.get_song_and_file_names_from_album(proper_album_name + " " + tag)[0]
             first_song = songs_in_album.pop(0)
+            first_song_source = get_source(first_song)[0]
+            song_queue.append(first_song_source)
             queued_song_names.append(first_song)
-            player = voice.play(get_source(first_song), after=play_next_in_queue)
+            voice.play(first_song_source, after=play_next_in_queue)
             for song_name in songs_in_album:
-                song_queue.append(get_source(song_name))
+                song_queue.append(get_source(song_name)[0])
                 queued_song_names.append(song_name)
         else:
-            songs_in_album = MusicLibraryNavigation.get_song_names_from_album(arg + " " + tag)
+            await ctx.message.add_reaction("👍") 
+            songs_in_album = MusicLibraryNavigation.get_song_and_file_names_from_album(proper_album_name + " " + tag)[0]
             for song_name in songs_in_album:
-                song_queue.append(get_source(song_name))
-                queued_song_names.append(song_name)            
+                song_queue.append(get_source(song_name)[0])
+                queued_song_names.append(song_name)      
 
 # (!queue) Displays the queue
 @client.command()
@@ -206,6 +225,25 @@ async def queue(ctx):
             await ctx.send("(NOW PLAYING) " + cleaned_queue_listing)
         else:
             await ctx.send("Queue's empty lol")
+
+# (!shuffle) Randomly reorders the queue (this is irreversible)
+@client.command()
+async def shuffle(ctx):
+    if await check_voice_channel(ctx, "both"):
+        global song_queue, queued_song_names
+        if len(song_queue) > 2:
+            await ctx.message.add_reaction("👍")
+            names_and_associated_sources = list(zip(queued_song_names, song_queue))
+            preserve_the_first = names_and_associated_sources.pop(0)
+            random.shuffle(names_and_associated_sources)
+            names_and_associated_sources.insert(0, preserve_the_first)
+            queued_song_names, song_queue = zip(*names_and_associated_sources)
+            queued_song_names = list(queued_song_names)
+            song_queue = list(song_queue)
+        elif len(song_queue) == 1 or len(song_queue) == 2:
+            await ctx.send("Ahaha you gotta be kidding me right?")
+        else:
+            await ctx.send("Bro what are you trying to shuffle??")
 
 # (!skip) Skips the current song
 @client.command()
@@ -254,7 +292,7 @@ async def remove(ctx, arg):
 @client.command()
 async def playrandom(ctx, arg):
     if await check_voice_channel(ctx, "both"):
-        voice = ctx.guild.voice_client
+        voice = discord.utils.get(client.voice_clients, guild=ctx.guild)
         try:
             arg_as_number = int(arg)
         except ValueError:
@@ -265,12 +303,12 @@ async def playrandom(ctx, arg):
             await ctx.send("Let's keep it below 10 at once lol")
         else:
             for i in range(arg_as_number):
-                random_song = MusicLibraryNavigation.get_any_random_song_name()
-                source_of_random_song = get_source(random_song)
+                random_song = MusicBotRandomness.get_any_random_song_name()
+                source_of_random_song = get_source(random_song)[0]
                 if song_queue == []:
                     song_queue.append(source_of_random_song)
                     queued_song_names.append(random_song)
-                    player = voice.play(source_of_random_song, after=play_next_in_queue)
+                    voice.play(source_of_random_song, after=play_next_in_queue)
                     await ctx.send("Now playing " + random_song)
                 else:
                     song_queue.append(source_of_random_song)

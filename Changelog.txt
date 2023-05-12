@@ -1,0 +1,76 @@
+1.0 | April 22, 2022 | The Very Beginning
+- Bot plays .mp3 and .m4a files from a single music folder
+- Basic things: list queue system, generate song name list on startup
+- Basic functions: get_source (song name -> audio for player), play_next_in_queue
+- Commands: !hello, !join, !leave, !pause, !resume, !stop, !play, !queue, !skip, !helpme
+
+1.1 | April 28, 2022 | Play Random Update
+- Added !playrandom command for playing up to 10 random songs
+- Added !clear and !remove commands for clearing queue and removing songs from the queue
+- Added "is the user and/or bot in a voice channel?" checks to relevant commands
+- Changed !helpme to !help (overwrote default !help response)
+- List of song names can now be generated via get_clean_list function
+
+1.2 | May 7, 2022 | Reactions and Voice Check Update
+- Added emoji acknowledgement reactions to commands without other responses
+- Condensed voice status checks into a check_voice_channel function
+- Added a cease function that stops the player and clears the queue (!stop, !skip, !clear now use this)
+- Modified play_next_in_queue (removed ctx dependency, now stops player before playing the next song and calling play_next_in_queue afterwards)
+- Updated various command descriptions
+
+1.3 | May 21, 2022 | Minor Fixes
+- Fixed skip! skipping repeatedly until queue is empty (no need to call play_next_in_queue after voice.stop)
+- Removed the option of using !remove if queue only has one song
+
+2.0 | August 1, 2022 | Music Library Update
+- Bot can now access my full music collection (most code for this in MusicLibraryNavigation.py)
+    - Song/album/genre name functions: get_all_genres, get_albums_from_genre, get_genre_from_album, get_song_names_from_album, get_file_names_from_album, get_song_and_file_names_from_album
+        - Music collection has albums with alphabetical or numbered (when there's a desired order) file names (pertains to get_song_names_from_album)
+    - get_song_path function retrieves path from song name (used in main's get_source function)
+    - get_any_random_song_name function generates a random song (only in [gen] albums)
+        - Music collection has [gen] and [mmm] albums (gen for music I want to share, mmm for no thanks)
+    - get_random_playlist function is a placeholder containing logic for picking random albums
+- !stop can now be used when player is paused
+- !playrandom code for random song selection moved to MusicLibraryNavigation (get_any_random_song_name function)
+- New message for invalid song title inputs
+
+2.1 | August 4, 2022 | Play Albums Update
+- Added !playalbum command for playing all songs in specified album (uses new functions check_album_validity_and_get_tag and get_song_names_from_album in MusicLibraryNavigation.py)
+- New function check_album_validity_and_get_tag returns True and the .mp3/.m4a of the album's songs for valid album inputs
+- New function get_genre_densities returns a list of genre "weights" ("heavier" genres containing more albums)
+    - Added this function as the "weights" argument in random.choices in get_any_random_song_name
+- New function song_sorter (turns song number string to int), used as key for list comprehension song sorting (order now goes 1>2>...10 instead of "1">"10">"2") in get_song_names_from_album
+- Replaced get_albums_from_genre (only gave folder names) with get_album_folder_names_from_genre and get_album_names_from_genre
+    - Updated get_genre_from_album, get_song_path, get_any_random_song_name, get_any_random_album to reflect this change
+- New not-yet-usable function get_any_random_album is a WORK IN PROGRESS with thought process outlined and code not quite complete
+
+3.0 | May 12, 2023 | Back in Business - Ease of Use Update
+- Updated intents to include message content so bot actually works
+- Made it so no quotes are needed for !play and !play-album (everything after is considered the input)
+- Changed get_song_path, get_source, and check_album_validity_and_get_tag so song/album name validity checking is not case sensitive
+    - get_source and check_album_validity_and_get_tag now additionally return the proper song/album names, updated !play, !play-album, and !playrandom accordingly to make sure they're getting the right returns from that, also !play now displays the correct name in the confirmation announcement and queue
+- Put code (from MusicLibraryNavigation.py) pertaining to random selection into a new file (MusicBotRandomness.py)
+- Consolidation: removed get_song_names_from_album and get_file_names_from_album (now just use get_song_and_file_names_from_album instead)
+    - Updated get_song_path, get_any_random_song_name, get_any_random_album, !play-album to reflect this change
+    - Updated description and song sorting (see 2.1, wasn't added to this specific function in previous update) for get_song_and_file_names_from_album 
+    - Did the same thing with get_album_folder_names_from_genre and get_album_names_from_genre (now get_album_and_folder_names_from_genre)
+        - Updated get_genre_from_album, get_song_path, get_any_random_song_name, get_any_random_album, check_album_validity_and_get_tag, get_genre_densities to reflect this change
+- Removed all instances of "player =" for "voice.play" (turns out it was unnecessary the whole time)
+- Standardized "voice = " to "discord.utils.get(client.voice_clients) (guild=ctx.guild when applicable), instead of also using ctx.guild.voice_client
+    - Removed an unnecessary "voice = " in !join
+- Fixed "AlbumArtSmall.jpg" and "Folder.jpg" interfering with song_name_sorter in MusicLibraryNavigation.py
+- Made new file tools.py for miscellaneous useful functions, added remove_dupes function (input list, prints duplicates found and returns new list with all duplicates after original first instance removed)
+- New command !shuffle randomly reorders the queue (preserving the first song currently playing), added it to !help
+- Fixed !leave so it now stops music player and clears everything
+- Fixed cease so it now checks that there's a voice client before calling voice.stop
+- Fixed !play-album skipping the second song in an album when called with empty queue
+    - The issue was that I didn't add the first song to song_queue so when the first song ended, play_next_in_queue removed the song in the first queue position (which would have been the second song)
+- Changed !playalbum to !play-album, gave it reactions, fixed other miscellaneous errors plaguing it, added it to !help
+- !join clears the queue and everything upon entering a new voice channel (fresh start pretty much)
+- Added "！" as a second command prefix for chinese keyboard
+- Added aliases for !leave (depart, goodbye, die), !play (放)
+- Tweaked responses in check_voice_channel and various other places for personality
+- Fixed description for get_all_genres in MusicLibraryNavigation
+- (Still in progress) Made a new file MusicBotSearching, which contains the generate_album_and_song_list function, as well as incomplete starts to the album_suggestions and song_suggestions functions
+    - MPDB.py now uses generate_album_and_song_list when run (generates song/album list on startup)
+    - check_album_validity_and_get_tag and get_source should be untouched but !play and !playalbum would use song_suggestions and album_suggestions (when they're done)
