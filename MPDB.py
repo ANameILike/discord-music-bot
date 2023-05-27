@@ -18,6 +18,7 @@ from discord import FFmpegPCMAudio
 from os.path import exists as file_exists
 from apikeys import *
 import random
+import asyncio
 import os
 
 # Returns a source for the player for valid names (invalid returns False)
@@ -28,13 +29,17 @@ def get_source(song_name):
     elif file_exists(song_path):
         source = FFmpegPCMAudio(song_path)
         if song_path.partition(". ")[2] == "":
-            proper_name = song_path.partition("]\\")[2][:-4]
+            name_with_rating_maybe = song_path.partition("]\\")[2][:-4]
         else:
-            proper_name = song_path.partition(". ")[2][:-4]
+            name_with_rating_maybe = song_path.partition(". ")[2][:-4]
+        if len(name_with_rating_maybe) > 6 and name_with_rating_maybe[-6] == "[":
+            proper_name = name_with_rating_maybe[:-7]
+        else:
+            proper_name = name_with_rating_maybe
         return source, proper_name
     else:
         return False, "Bro you typed it wrong lol"
-
+    
 # Still setting up
 intents = discord.Intents.default()
 intents.message_content = True
@@ -100,6 +105,39 @@ def cease():
     voice = discord.utils.get(client.voice_clients)
     if voice:
         voice.stop()
+
+# Plays song if song queue is empty, appends song to the queue otherwise
+def play_song(voice, song_source, song_display_name):
+    if song_queue == []:
+        song_queue.append(song_source)
+        queued_song_names.append(song_display_name)
+        voice.play(song_source, after=play_next_in_queue)
+        return "Now playing " + song_display_name
+    else:
+        song_queue.append(song_source)
+        queued_song_names.append(song_display_name)
+        return "Added " + song_display_name + " to the queue!"
+
+yes_responses = "yes, yeah, ye, ya, sure, yes please, sure please, yes pls, yes thanks, yeah thanks, ye thanks, ya thanks, sure thanks, yes thx, yeah thx, ye thx, ya thx, sure thx"
+no_responses = "no, nah, no thank you, no thanks, nah thanks, no thx, nah thx"
+
+# Determines if the user wants the suggested song played and acts accordingly (used in !play and !play-album in conjunction with the song_suggestions and album_suggestions functions)
+def suggestion_followup_response(voice, user_response, song_or_album, suggestions):
+    if user_response.content in yes_responses and song_or_album == "song":
+        new_source, new_name_to_display = get_source(suggestions[0])
+        display_message = play_song(voice, new_source, new_name_to_display)
+        return display_message
+    elif user_response.content in yes_responses and song_or_album == "album":
+        album_to_play = suggestions[0]
+        valid, tag, proper_album_name = MusicLibraryNavigation.check_album_validity_and_get_tag(album_to_play)
+        song_names_in_album = MusicLibraryNavigation.get_song_and_file_names_from_album(proper_album_name + " " + tag)[0]
+        for song_name in song_names_in_album:
+            play_song(voice, get_source(song_name)[0], song_name)
+        return "It's done!"
+    elif user_response.content in no_responses:
+        return "Ok!"
+    else:
+        return "Bro that was a yes or no question lol"  
 
 # Commands start below
 
@@ -179,16 +217,22 @@ async def play(ctx, *, arg):
         voice = discord.utils.get(client.voice_clients, guild=ctx.guild)
         potential_source, name_to_display = get_source(arg)
         if potential_source == False:
-            await ctx.send("Either I don't have that song or you typed something wrong D: \nDon't use quotes here and don't worry about case sensitivity")
-        elif song_queue == []:
-            song_queue.append(potential_source)
-            queued_song_names.append(name_to_display)
-            voice.play(potential_source, after=play_next_in_queue)
-            await ctx.send("Now playing " + name_to_display)
+            specific_song_suggestions = MusicBotSearching.song_suggestions(arg)
+            await ctx.send("Either I don't have that song or you typed something wrong D: \nNo quotes or case sensitivity needed. \nHere are the 3 closest things I have to what you typed: \n" + f"{specific_song_suggestions}")
+            await ctx.send("Want me to play the first one?")
+            intended_respondent = ctx.author
+            intended_channel = ctx.channel
+            def check_intended(message):
+                return message.author == intended_respondent and message.channel == intended_channel
+            try:
+                user_response = await client.wait_for("message", check=check_intended, timeout=15)
+                bot_response = suggestion_followup_response(voice, user_response, "song", specific_song_suggestions)
+                await ctx.send(bot_response)
+            except asyncio.TimeoutError:
+                await ctx.send("Bro you really left me hanging like that...")
         else:
-            song_queue.append(potential_source)
-            queued_song_names.append(name_to_display)
-            await ctx.send("Added " + name_to_display + " to the queue!")
+            display_message = play_song(voice, potential_source, name_to_display)
+            await ctx.send(display_message)
 
 # (!play-album [albumname]) Plays all songs of an album
 @client.command(name="play-album")
@@ -197,24 +241,24 @@ async def playalbum(ctx, *, arg):
         voice = discord.utils.get(client.voice_clients, guild=ctx.guild)
         valid, tag, proper_album_name = MusicLibraryNavigation.check_album_validity_and_get_tag(arg)
         if not valid:
-            await ctx.send("Either I don't have that album or you typed something wrong D: \nDon't use quotes here and don't worry about case sensitivity)")
-        elif song_queue == []:
+            specific_album_suggestions = MusicBotSearching.album_suggestions(arg)
+            await ctx.send("Either I don't have that album or you typed something wrong D: \nDon't use quotes here and don't worry about case sensitivity. \nHere are the 3 closest things I have to what you typed: \n" + f"{specific_album_suggestions}")
+            await ctx.send("Want me to play the first one?")
+            intended_respondent = ctx.author
+            intended_channel = ctx.channel
+            def check_intended(message):
+                return message.author == intended_respondent and message.channel == intended_channel
+            try:
+                user_response = await client.wait_for("message", check=check_intended, timeout=15)
+                bot_response = suggestion_followup_response(voice, user_response, "album", specific_album_suggestions)
+                await ctx.send(bot_response)
+            except asyncio.TimeoutError:
+                await ctx.send("Bro you really left me hanging like that...")
+        else:
             await ctx.message.add_reaction("👍")
             songs_in_album = MusicLibraryNavigation.get_song_and_file_names_from_album(proper_album_name + " " + tag)[0]
-            first_song = songs_in_album.pop(0)
-            first_song_source = get_source(first_song)[0]
-            song_queue.append(first_song_source)
-            queued_song_names.append(first_song)
-            voice.play(first_song_source, after=play_next_in_queue)
             for song_name in songs_in_album:
-                song_queue.append(get_source(song_name)[0])
-                queued_song_names.append(song_name)
-        else:
-            await ctx.message.add_reaction("👍") 
-            songs_in_album = MusicLibraryNavigation.get_song_and_file_names_from_album(proper_album_name + " " + tag)[0]
-            for song_name in songs_in_album:
-                song_queue.append(get_source(song_name)[0])
-                queued_song_names.append(song_name)      
+                play_song(voice, get_source(song_name)[0], song_name)
 
 # (!queue) Displays the queue
 @client.command()
@@ -305,15 +349,7 @@ async def playrandom(ctx, arg):
             for i in range(arg_as_number):
                 random_song = MusicBotRandomness.get_any_random_song_name()
                 source_of_random_song = get_source(random_song)[0]
-                if song_queue == []:
-                    song_queue.append(source_of_random_song)
-                    queued_song_names.append(random_song)
-                    voice.play(source_of_random_song, after=play_next_in_queue)
-                    await ctx.send("Now playing " + random_song)
-                else:
-                    song_queue.append(source_of_random_song)
-                    queued_song_names.append(random_song)
-                    await ctx.send("Added " + random_song + " to the queue!")    
+                await ctx.send(play_song(voice, source_of_random_song, random_song))
 
 # Starts the magic
 client.run(BOTTOKEN)

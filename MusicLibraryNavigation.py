@@ -44,13 +44,20 @@ def get_song_and_file_names_from_album(album):
     if "Folder.jpg" in contents:
         contents.remove("Folder.jpg")
     if "1. " in contents[0]:
-        album_type = 1
+        # album_type = 1
         contents = sorted(contents, key=song_name_sorter)
-        song_names = [content[content.index(". ") + 2: -4] for content in contents]
+        song_names_with_rating_maybe = [content[content.index(". ") + 2: -4] for content in contents]
     else:
-        album_type = 2
-        song_names = [content[:-4] for content in contents]
-    return song_names, contents
+        # album_type = 2
+        song_names_with_rating_maybe = [content[:-4] for content in contents]
+    final_song_names = []
+    for song_name in song_names_with_rating_maybe:
+        if len(song_name) > 6 and song_name[-6] == "[":
+            final_song_names.append(song_name[:-7])
+        else:
+            final_song_names.append(song_name)
+    return final_song_names, contents
+
 
 # Checks to see if provided album name matches an existing one
 def check_album_validity_and_get_tag(album_input):

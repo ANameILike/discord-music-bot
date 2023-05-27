@@ -74,3 +74,14 @@
 - (Still in progress) Made a new file MusicBotSearching, which contains the generate_album_and_song_list function, as well as incomplete starts to the album_suggestions and song_suggestions functions
     - MPDB.py now uses generate_album_and_song_list when run (generates song/album list on startup)
     - check_album_validity_and_get_tag and get_source should be untouched but !play and !playalbum would use song_suggestions and album_suggestions (when they're done)
+
+3.1 | May 27, 2023 | Suggestions Update
+- Finished functions song_suggestions and album_suggestions in MusicBotSearching, which return the three closest song/album names given an invalid name input, added descriptions for both
+    - Added new function lowercase_to_proper_name to MusicBotSearching (used by song_suggestions and album_suggestions), just makes transitioning from lowercase to original name easier
+    - Integrated song_suggestions and album_suggestions into !play and !play-album, respectively
+- Music bot now asks if you want that first suggestion (see above) played, used in !play and !play-album
+    - Added constants yes_responses and no_responses to MPDB (user input gets checked against this for yes/no questions)
+    - Added suggestion_followup_response function to MPDB, which determines if the user wants the suggested song played and acts accordingly (used in !play and !play-album in conjunction with song_suggestions and album_suggestions)
+- Added play_song function in MPDB (used in !play, !play-album, !playrandom) just to consolidate code
+- Adjusted get_song_and_file_names_from_album in MusicLibraryNavigation and get_source in MPDB to account for new [] song rating system
+- Commented out "album_type = 1" and "album_type = 2" in get_song_and_file_names_from_album (they are there only for context)
