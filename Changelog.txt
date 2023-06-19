@@ -85,3 +85,17 @@
 - Added play_song function in MPDB (used in !play, !play-album, !playrandom) just to consolidate code
 - Adjusted get_song_and_file_names_from_album in MusicLibraryNavigation and get_source in MPDB to account for new [] song rating system
 - Commented out "album_type = 1" and "album_type = 2" in get_song_and_file_names_from_album (they are there only for context)
+
+4.0 | June 18, 2023 | Play Artists Update
+- Created MusicBotMetadata.py, moved initial song and album list generation into it
+    - Added new startup functions get_all_artists_and_genres and get_all_album_folders_and_album_artists to MusicBotMetadata
+    - Added get_songs_by_artist, which takes an artist name and returns a list of all song names by that artist with tags still on
+- Added commands !play-artist, which plays all songs from a specified artist, and !play-best-of, which plays songs with [best] or [icon] tag from a specified artist, also added to !help
+    - Added function artist_suggestion to MusicBotSearching, changed suggestion mechanisms (like lowercase_to_proper_name, suggestion_followup_response, etc) accordingly
+- Added get_artists_stats to tools.py, which is used to display a list of artists with their song counts sorted in descending order
+- Changed get_song_and_file_names_from_album to get_song_file_and_with_tag_names_from_album (now returns an additional item - the song name with only the [] tag at the end), updated functions using it as needed
+- Added a check for duplicate song names to tools.py with remove_dupes
+- Made import statements for MusicLibraryNavigation more specific (instead of just importing *), also removed unused ones
+- Updated descriptions in MusicLibraryNavigation for specificity regarding album vs album folder name inputs
+- Changed various instances of "album in get_album_and_folder_names_from_genre" to album_folder in ... for clarity regarding what is actually getting used from that function
+- Added function deal_with_tags to MPDB.py, which I will deal with later (will be used to create a filtered song list based on song tags)

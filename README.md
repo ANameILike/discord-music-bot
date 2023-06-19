@@ -2,10 +2,11 @@
 Music bot for discord
 ---------------------
 - Uses ! prefix
-- Can currently only play certain songs from my music collection
+- Plays songs from my music collection
 - Commands:
     - help, hello
-    - join, play [song name], play-album [album name], pause, resume, stop, leave
+    - join, play [song name], play-album [album name], play-artist [artist name], play-best-of [artist name]
+    - pause, resume, stop, leave
     - queue, shuffle, skip, remove [queue place], clear
     - playrandom [number]
 

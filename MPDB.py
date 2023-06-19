@@ -13,6 +13,7 @@ import discord
 import MusicLibraryNavigation
 import MusicBotRandomness
 import MusicBotSearching
+import MusicBotMetadata
 from discord.ext import commands
 from discord import FFmpegPCMAudio
 from os.path import exists as file_exists
@@ -52,7 +53,7 @@ song_discard = []
 discarded_song_names = []
 
 # Setting up lists of valid album and song names
-all_album_names, all_song_names = MusicBotSearching.all_album_names, MusicBotSearching.all_song_names
+all_album_names, all_song_names = MusicBotMetadata.all_album_names, MusicBotMetadata.all_song_names
 
 # Exactly what the name suggests
 def play_next_in_queue(useless):
@@ -117,22 +118,37 @@ def play_song(voice, song_source, song_display_name):
         song_queue.append(song_source)
         queued_song_names.append(song_display_name)
         return "Added " + song_display_name + " to the queue!"
+    
+def deal_with_tags():
+    return "list of songs depending on whether -best, -iconic, -good, -mine, or -all was specified"
 
 yes_responses = "yes, yeah, ye, ya, sure, yes please, sure please, yes pls, yes thanks, yeah thanks, ye thanks, ya thanks, sure thanks, yes thx, yeah thx, ye thx, ya thx, sure thx"
 no_responses = "no, nah, no thank you, no thanks, nah thanks, no thx, nah thx"
 
-# Determines if the user wants the suggested song played and acts accordingly (used in !play and !play-album in conjunction with the song_suggestions and album_suggestions functions)
-def suggestion_followup_response(voice, user_response, song_or_album, suggestions):
-    if user_response.content in yes_responses and song_or_album == "song":
+# Determines if the user wants the suggested song/album/artist played and acts accordingly (used in !play function family in conjunction with the song_suggestions, album_suggestions, and artist_suggestions functions)
+def suggestion_followup_response(voice, user_response, song_album_or_artist, suggestions):
+    if user_response.content in yes_responses and song_album_or_artist == "song":
         new_source, new_name_to_display = get_source(suggestions[0])
         display_message = play_song(voice, new_source, new_name_to_display)
         return display_message
-    elif user_response.content in yes_responses and song_or_album == "album":
+    elif user_response.content in yes_responses and song_album_or_artist == "album":
         album_to_play = suggestions[0]
-        valid, tag, proper_album_name = MusicLibraryNavigation.check_album_validity_and_get_tag(album_to_play)
-        song_names_in_album = MusicLibraryNavigation.get_song_and_file_names_from_album(proper_album_name + " " + tag)[0]
+        tag, proper_album_name = MusicLibraryNavigation.check_album_validity_and_get_tag(album_to_play)[1::]
+        song_names_in_album = MusicLibraryNavigation.get_song_file_and_with_tag_names_from_album(proper_album_name + " " + tag)[0]
         for song_name in song_names_in_album:
             play_song(voice, get_source(song_name)[0], song_name)
+        return "It's done!"
+    elif user_response.content in yes_responses and "artist" in song_album_or_artist:
+        songs_by_artist = MusicBotMetadata.get_songs_by_artist(suggestions[0])
+        if song_album_or_artist == "artist-best":
+            songs_by_artist = [song for song in songs_by_artist if "[best]" in song or "[icon]" in song]
+            if songs_by_artist == []:
+                return "That artist has exactly 0 songs tagged as best - perhaps the tags haven't been added yet, or you just need to pick a better artist :( \nAlso try !play-artist instead if you really want their songs.)"
+        for song_with_tag in songs_by_artist:
+            if song_with_tag[-1] == "]":
+                play_song(voice, get_source(song_with_tag[:-7])[0], song_with_tag[:-7])
+            else:
+                play_song(voice, get_source(song_with_tag)[0], song_with_tag)
         return "It's done!"
     elif user_response.content in no_responses:
         return "Ok!"
@@ -150,7 +166,7 @@ async def on_ready():
 # (!help) Displays commands
 @client.command()
 async def help(ctx):
-    await ctx.send("Here are a list of potential commands to be used with the (!) prefix: \nGeneral: \n\thelp, hello \nMusic (must do !join first): \n\tplay [song name], play-album [album name], pause, resume, stop, leave \n\tqueue, shuffle, skip, remove [queue number], clear \n\tplayrandom [number]")
+    await ctx.send("Here are a list of potential commands to be used with the (!) prefix: \nGeneral: \n\thelp, hello \nMusic (must do !join first): \n\tplay [song name], play-album [album name], play-artist [artist name], play-best-of [artist name], \n\tpause, resume, stop, leave \n\tqueue, shuffle, skip, remove [queue number], clear \n\tplayrandom [number]")
 
 # (!hello) Basic hello
 @client.command()
@@ -256,9 +272,69 @@ async def playalbum(ctx, *, arg):
                 await ctx.send("Bro you really left me hanging like that...")
         else:
             await ctx.message.add_reaction("👍")
-            songs_in_album = MusicLibraryNavigation.get_song_and_file_names_from_album(proper_album_name + " " + tag)[0]
+            songs_in_album = MusicLibraryNavigation.get_song_file_and_with_tag_names_from_album(proper_album_name + " " + tag)[0]
             for song_name in songs_in_album:
                 play_song(voice, get_source(song_name)[0], song_name)
+
+# (!play-artist [artistname]) Plays all songs of an artist
+@client.command(name="play-artist")
+async def playartist(ctx, *, arg):
+    if await check_voice_channel(ctx, "both"):
+        voice = discord.utils.get(client.voice_clients, guild=ctx.guild)
+        songs_by_artist = MusicBotMetadata.get_songs_by_artist(arg)
+        if songs_by_artist == 0:
+            artist_suggestion = MusicBotSearching.artist_suggestion(arg)
+            await ctx.send("Either I don't have any songs by that artist or you typed something wrong D: \n It's not case sensitive btw. \n Here's the closest thing I have to what you typed: \n" + f"{artist_suggestion}")
+            await ctx.send("Want me to play songs by this artist?")
+            intended_respondent = ctx.author
+            intended_channel = ctx.channel
+            def check_intended(message):
+                return message.author == intended_respondent and message.channel == intended_channel
+            try:
+                user_response = await client.wait_for("message", check=check_intended, timeout=15)
+                bot_response = suggestion_followup_response(voice, user_response, "artist", artist_suggestion)
+                await ctx.send(bot_response)
+            except asyncio.TimeoutError:
+                await ctx.send("Bro you really left me hanging like that...")
+        else:
+            await ctx.message.add_reaction("👍")
+            for song_with_tag in songs_by_artist:
+                if song_with_tag[-1] == "]":
+                    play_song(voice, get_source(song_with_tag[:-7])[0], song_with_tag[:-7])
+                else:
+                    play_song(voice, get_source(song_with_tag)[0], song_with_tag)
+
+# (!play-best-of [artistname]) Plays songs of an artist with [best] or [icon] tag
+@client.command(name="play-best-of")
+async def playbestofartist(ctx, *, arg):
+    if await check_voice_channel(ctx, "both"):
+        voice = discord.utils.get(client.voice_clients, guild=ctx.guild)
+        songs_by_artist = MusicBotMetadata.get_songs_by_artist(arg)
+        if songs_by_artist == 0:
+            artist_suggestion = MusicBotSearching.artist_suggestion(arg)
+            await ctx.send("Either I don't have any songs by that artist or you typed something wrong D: \n It's not case sensitive btw. \n Here's the closest thing I have to what you typed: \n" + f"{artist_suggestion}")
+            await ctx.send("Want me to play songs by this artist?")
+            intended_respondent = ctx.author
+            intended_channel = ctx.channel
+            def check_intended(message):
+                return message.author == intended_respondent and message.channel == intended_channel
+            try:
+                user_response = await client.wait_for("message", check=check_intended, timeout=15)
+                bot_response = suggestion_followup_response(voice, user_response, "artist-best", artist_suggestion)
+                await ctx.send(bot_response)
+            except asyncio.TimeoutError:
+                await ctx.send("Bro you really left me hanging like that...")
+        else:
+            best_songs_by_artist = [song for song in songs_by_artist if "[best]" in song or "[icon]" in song]
+            if best_songs_by_artist == []:
+                await ctx.send("Looks like this artist doesn't have any - either the tags haven't been done or you gotta pick a better one lol (or just try \"!play-artist\" instead)")
+            else:
+                await ctx.message.add_reaction("👍")
+                for song_with_tag in best_songs_by_artist:
+                    if song_with_tag[-1] == "]":
+                        play_song(voice, get_source(song_with_tag[:-7])[0], song_with_tag[:-7])
+                    else:
+                        play_song(voice, get_source(song_with_tag)[0], song_with_tag)
 
 # (!queue) Displays the queue
 @client.command()
