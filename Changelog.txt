@@ -99,3 +99,24 @@
 - Updated descriptions in MusicLibraryNavigation for specificity regarding album vs album folder name inputs
 - Changed various instances of "album in get_album_and_folder_names_from_genre" to album_folder in ... for clarity regarding what is actually getting used from that function
 - Added function deal_with_tags to MPDB.py, which I will deal with later (will be used to create a filtered song list based on song tags)
+
+4.1 | September 29, 2023 | Genres and Tags Update
+- Changed command names from playalbum, playartist, playbestofartist, and playrandom to play_album, play_artist, play_artist_best, and play_random
+    - !play-best-of is now !play-artist-best (but !play-best-by works), !playrandom is now !play-random
+- Finished deal_with_tags, which filters a list of songs based on their tags and returns a list of song names with tags removed
+    - Integrated deal_with_tags into the older functions suggestion_followup_response, play_artist, and play_artist_best
+    - deal_with_tags will be used in virtually every function regarding tags from here on out
+- Added the commands !play-artist-iconic and !play-genre-iconic, which play songs by the specified artist/in the specified genre with an [icon] tag
+    - Fixed get_source to account for songs potentially having a number, a "Feat. " tag, both, or none at all (would incorrectly display some names in the queue)
+- Changed get_all_genres_songs_and_artists to return an extra single dict of all song and artist pairs (this new single dict is used in the new function get_artist_from_song)
+- Added function get_artist_from_song_name to MusicBotMetadata, which takes a song name input without tags and returns its artist
+- Added function get_songs_from_genre, which takes a genre name and returns a list of all song names in that genre with tags still on
+    - Added ability for lowercase_to_proper_name to deal with genres, tweaked its description
+    - Added ability for suggestion_followup_response to deal with genres
+- Updated description of get_songs_by_artist now that deal_with_tags exists
+- Adjusted command names related to artists from "of" to "by", adjusted descriptions as well
+- Added commands !play-artist-all and !play-genre-all, which play all songs by an artist/in a genre regardless of tag 
+    - Updated suggestion_followup_response to include "all" requests
+- Adjusted !queue so it can display queues with over 2000 characters (the discord message limit) across multiple messages
+- Updated help command to include new commands
+- Added two new functions search_within_songs (searches across all song names) and get_song_album_name_overlaps (identifies song-album name matches) to tools.py

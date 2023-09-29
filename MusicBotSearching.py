@@ -7,21 +7,26 @@ import difflib
 
 all_album_names, all_song_names = MusicBotMetadata.all_album_names, MusicBotMetadata.all_song_names
 all_artists_and_genres = MusicBotMetadata.all_artists_and_genres
+all_genres_songs_and_artists = MusicBotMetadata.all_genres_songs_and_artists
 
-# Takes a lowercase name as well as "album, song, or artist name" specification, returns the name with all capital letters originally present restored.
-def lowercase_to_proper_name(lowercase_name, album_song_or_artist):
-    if album_song_or_artist == "album":
+# Takes a lowercase name as well as "album, song, artist, or genre name" specification, returns the name with all capital letters originally present restored.
+def lowercase_to_proper_name(lowercase_name, album_song_artist_or_genre):
+    if album_song_artist_or_genre == "album":
         lowercase_pool = [album_name.lower() for album_name in all_album_names]
         name_location = lowercase_pool.index(lowercase_name)
         proper_name = all_album_names[name_location]
-    elif album_song_or_artist == "song":
+    elif album_song_artist_or_genre == "song":
         lowercase_pool = [song_name.lower() for song_name in all_song_names]
         name_location = lowercase_pool.index(lowercase_name)
         proper_name = all_song_names[name_location]
-    elif album_song_or_artist == "artist":
+    elif album_song_artist_or_genre == "artist":
         lowercase_pool = [artist_name.lower() for artist_name in list(all_artists_and_genres.keys())]
         name_location = lowercase_pool.index(lowercase_name)
         proper_name = list(all_artists_and_genres.keys())[name_location]
+    elif album_song_artist_or_genre == "genre":
+        lowercase_pool = [genre_name.lower() for genre_name in list(all_genres_songs_and_artists.keys())]
+        name_location = lowercase_pool.index(lowercase_name)
+        proper_name = list(all_genres_songs_and_artists.keys())[name_location]
     return proper_name
 
 # Takes an invalid name and returns a list of the three most similar song names available.
@@ -73,3 +78,15 @@ def artist_suggestion(bad_artist_name):
         lowercase_closest_artist = difflib.get_close_matches(bad_artist_name.lower(), no_case, n=1, cutoff=0)
         correct_artist_name = lowercase_to_proper_name(lowercase_closest_artist[0], "artist")   
     return [correct_artist_name]
+
+# Takes an invalid genre name and returns the closest genre name available (as a list for discord UI appearance).
+def genre_suggestion(bad_genre_name):
+    no_case = [genre_name.lower() for genre_name in all_genres_songs_and_artists.keys()]
+    genre_names_with_bad_name_as_substring = [genre_name for genre_name in no_case if bad_genre_name.lower() in genre_name]
+    if len(genre_names_with_bad_name_as_substring) > 0:
+        lowercase_closest_genre = difflib.get_close_matches(bad_genre_name.lower(), genre_names_with_bad_name_as_substring, n=1, cutoff=0)
+        correct_genre_name = lowercase_to_proper_name(lowercase_closest_genre[0], "genre")
+    else:
+        lowercase_closest_genre = difflib.get_close_matches(bad_genre_name.lower(), no_case, n=1, cutoff=0)
+        correct_genre_name = lowercase_to_proper_name(lowercase_closest_genre[0], "genre")   
+    return [correct_genre_name]

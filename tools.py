@@ -16,6 +16,7 @@ def remove_dupes(list_with_dupes):
 from MusicBotMetadata import all_song_names
 remove_dupes(all_song_names)
 
+
 # Displays a list of artists with their song counts, sorted in descending order
 import pandas as pd
 from MusicBotMetadata import all_genres_songs_and_artists
@@ -30,5 +31,27 @@ def get_artist_stats(song_artist_dict_within_genre_dict):
     sorted_by_count = grouped_by_artist.sort_values(by=["Count"], ascending=False)
     return sorted_by_count
 
-print(get_artist_stats(all_genres_songs_and_artists).head(50))
+pd.set_option("display.max_rows", None)
+print(get_artist_stats(all_genres_songs_and_artists))
 
+
+
+
+# Display a list of every song name containing a specified string
+def search_within_songs(song_list, search_term):
+    search_results = [song for song in song_list if search_term in song]
+    for result in search_results:
+        print(result)
+    return "done"
+
+search_within_songs(all_song_names, "Feat.")
+
+
+
+# This one's going to check song names against album names and print out the dupes
+def get_song_album_name_overlaps(song_list, album_list):
+    intersection = set(song_list).intersection(album_list)
+    print(intersection)
+
+from MusicBotMetadata import all_album_names
+get_song_album_name_overlaps(all_song_names, all_album_names)
